@@ -26,9 +26,9 @@ enum NetworkState
 	NS_PendingStart,
 	NS_Started,
 	NS_Lobby,
-	NS_WaitingForOthers,
+	NS_WaitingForPlayers,
 	NS_Game,
-	NS_GameOver
+	NS_EndGame
 };
 
 enum {
@@ -36,7 +36,7 @@ enum {
 	ID_GAME_START,
 	ID_PLAYER_ACTION,
 	ID_PLAYER_RETURN_MSG,
-	ID_PLAYER_START_TURN,
+	ID_PLAYER_START,
 	ID_GAME_OVER
 };
 
@@ -74,9 +74,9 @@ void RegisterPlayer(RakNet::Packet*);
 void DisplayMessage(RakNet::Packet*);
 std::string GetPlayerStats();
 void StartGame(RakNet::Packet*);
-void ResolveAction(RakNet::Packet*);
-void NextPlayerTurn();
-void StartingTurn(RakNet::Packet*);
+void DoAction(RakNet::Packet*);
+void NextPlayer();
+void TurnStart(RakNet::Packet*);
 void EndGame(RakNet::Packet*);
 
 int main()
@@ -146,11 +146,11 @@ int main()
 
 					g_rakPeerInterface->Send(&bs, HIGH_PRIORITY, RELIABLE_ORDERED, 0, RakNet::UNASSIGNED_SYSTEM_ADDRESS, true);
 
-					NextPlayerTurn();
+					NextPlayer();
 				}
 			}
 		}
-		else if (g_networkState == NS_GameOver)
+		else if (g_networkState == NS_EndGame)
 		{
 			if (isServer && doOnce)
 			{
@@ -233,10 +233,10 @@ void InputHandler()
 			bs.Write(charNum);
 			assert(g_rakPeerInterface->Send(&bs, HIGH_PRIORITY, RELIABLE_ORDERED, 0, g_serverAddress, false));
 			g_networkState_mutex.lock();
-			g_networkState = NS_WaitingForOthers;
+			g_networkState = NS_WaitingForPlayers;
 			g_networkState_mutex.unlock();
 		}
-		else if (g_networkState == NS_WaitingForOthers)
+		else if (g_networkState == NS_WaitingForPlayers)
 		{
 			static bool doOnce = false;
 			if (!doOnce)
@@ -326,10 +326,10 @@ void PacketHandler()
 					DisplayMessage(packet);
 					break;
 				case ID_PLAYER_ACTION:
-					ResolveAction(packet);
+					DoAction(packet);
 					break;
-				case ID_PLAYER_START_TURN:
-					StartingTurn(packet);
+				case ID_PLAYER_START:
+					TurnStart(packet);
 					break;
 				case ID_GAME_OVER:
 					EndGame(packet);
@@ -467,7 +467,7 @@ void OnLostConnection(RakNet::Packet* packet)
 		g_rakPeerInterface->Send(&bs, HIGH_PRIORITY, RELIABLE_ORDERED, 0, RakNet::UNASSIGNED_SYSTEM_ADDRESS, true);
 
 		if (playerNum == activePlayer)
-			NextPlayerTurn();
+			NextPlayer();
 	}
 }
 
@@ -603,7 +603,7 @@ void StartGame(RakNet::Packet* packet)
 	g_networkState_mutex.unlock();
 }
 
-void ResolveAction(RakNet::Packet* packet)
+void DoAction(RakNet::Packet* packet)
 {
 	assert(isServer);
 
@@ -662,7 +662,7 @@ void ResolveAction(RakNet::Packet* packet)
 
 	else
 	{
-		output.Write((RakNet::MessageID)ID_PLAYER_START_TURN);
+		output.Write((RakNet::MessageID)ID_PLAYER_START);
 		RakNet::uint24_t isActive = 1;
 		output.Write(isActive);
 		endTurn = false;
@@ -674,7 +674,7 @@ void ResolveAction(RakNet::Packet* packet)
 	if (endTurn)
 	{
 		g_rakPeerInterface->Send(&output, HIGH_PRIORITY, RELIABLE_ORDERED, 0, RakNet::UNASSIGNED_SYSTEM_ADDRESS, true);
-		NextPlayerTurn();
+		NextPlayer();
 	}
 	else
 	{
@@ -682,7 +682,7 @@ void ResolveAction(RakNet::Packet* packet)
 	}
 }
 
-void NextPlayerTurn()
+void NextPlayer()
 {
 	bool searchForNextAlivePlayer = true;
 	int nextPlayer = activePlayer;
@@ -697,7 +697,7 @@ void NextPlayerTurn()
 		{
 			searchForNextAlivePlayer = false;
 			g_networkState_mutex.lock();
-			g_networkState = NS_GameOver;
+			g_networkState = NS_EndGame;
 			g_networkState_mutex.unlock();
 			std::cout << "Gameover." << std::endl;
 		}
@@ -714,7 +714,7 @@ void NextPlayerTurn()
 		for (int i = 0; i < m_playerIDs.size(); i++)
 		{
 			RakNet::BitStream output;
-			output.Write((RakNet::MessageID)ID_PLAYER_START_TURN);
+			output.Write((RakNet::MessageID)ID_PLAYER_START);
 			RakNet::uint24_t isActive;
 			RakNet::RakString msg;
 			std::string str;
@@ -738,7 +738,7 @@ void NextPlayerTurn()
 	}
 }
 
-void StartingTurn(RakNet::Packet* packet)
+void TurnStart(RakNet::Packet* packet)
 {
 	RakNet::BitStream bs(packet->data, packet->length, false);
 	RakNet::MessageID messageId;
@@ -771,6 +771,6 @@ void EndGame(RakNet::Packet* packet)
 	std::cout << msg.C_String() << std::endl;
 
 	g_networkState_mutex.lock();
-	g_networkState = NS_GameOver;
+	g_networkState = NS_EndGame;
 	g_networkState_mutex.unlock();
 }
