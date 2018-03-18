@@ -1,0 +1,32 @@
+# Prerequisites
+*.d
+
+# Compiled Object files
+*.slo
+*.lo
+*.o
+*.obj
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Fortran module files
+*.mod
+*.smod
+
+# Executables
+*.exe
+*.out
+*.app
+
+# Ignore folders
+.vs/
+
+!RakNet-master/
+
+**.tlog
+**.log
+**.pdb
+**.idb
+
